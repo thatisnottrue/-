@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>전염병 확산 게임 - v2.15 (7×14 벌집 · 구조 분리)</title>
+  <title>전염병 확산 게임 - v2.16 (7×14 벌집 · 말 시각화)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root {
@@ -125,9 +125,8 @@
       padding: 4px;
       overflow: auto;
       background: transparent;
-      /* 필요하면 아래에서 전체 맵을 위/아래로 이동 가능 */
+      /* 필요하면 아래에서 전체 맵 위치 조정 가능 */
       /* margin-top: 20px; */
-      /* 전체 맵을 약간 왼쪽으로 당기고 싶으면 여기서 조정 */
       /* margin-left: -60px; */
     }
 
@@ -172,7 +171,7 @@
     }
     .hex-tile-content {
       position: absolute;
-      inset: 18%;
+      inset: 14%;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -191,6 +190,31 @@
     }
     .tile-bottom span.label {
       color: var(--text-muted);
+    }
+
+    /* === 말(토큰) 표시 영역 === */
+    .tile-pieces {
+      margin-top: 2px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    .piece {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.2);
+      box-sizing: border-box;
+    }
+    .piece.player {
+      background: #4a6fff; /* 플레이어: 파란색 */
+    }
+    .piece.citizen {
+      background: #999999; /* 시민: 회색 */
+    }
+    .piece.infected {
+      background: #ff4a4a; /* 감염: 빨간색 */
+      box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
     }
 
     .side-panel {
@@ -264,9 +288,9 @@
 <body>
   <div class="app">
     <header>
-      <h1>전염병 확산 게임 — 싱글플레이 프로토타입 v2.15</h1>
+      <h1>전염병 확산 게임 — 싱글플레이 프로토타입 v2.16</h1>
       <div class="header-right">
-        <span class="badge">로컬 시뮬레이션</span>
+        <span class="badge">GitHub + Netlify 배포</span>
         <span>플레이어 25명 · 시민 500명</span>
         <button class="btn secondary" id="addDummyLogBtn">테스트 로그 추가</button>
         <button class="btn secondary" id="newGameBtn">새 게임</button>
@@ -341,7 +365,7 @@
     </main>
 
     <footer>
-      ※ 이 버전은 로컬에서 플레이어를 직접 이동시키며(턴당 1칸, 6방향) 감염 확산 패턴을 관찰하기 위한 프로토타입입니다.
+      ※ 이 버전은 플레이어/시민을 말(토큰)으로 시각화하여 감염 확산 패턴을 관찰하기 위한 프로토타입입니다.
     </footer>
   </div>
 
@@ -370,23 +394,19 @@
       currentTurn: 1,
       entities: [], // 시민 + 플레이어
 
-      // 감염 기록 (학생 그래프용)
       historyCumulativeInfected: [],
       lastRecordedTurn: 0,
 
-      // 상자/백신
       activeChestTiles: new Set(),
       chestWave: 0,
       openedChestCount: 0,
       vaccineActive: false,
       vaccineFeatureEnabled: true,
 
-      // 플레이어 선택/이동
       selectedPlayer: null,
       selectedPlayerTileIndex: null,
       playersMovedThisTurn: new Set(),
 
-      // 타일 DOM 참조
       tileElements: []
     };
 
@@ -410,7 +430,6 @@
       newGameBtn: document.getElementById("newGameBtn")
     };
 
-    // 초기 전체 인구 표시
     UI.statTotal.textContent =
       GameConfig.NUM_CITIZENS + GameConfig.NUM_PLAYERS;
 
@@ -483,10 +502,10 @@
     }
 
     // =========================
-    // 5. 맵/타일 생성 (Render: Layout)
+    // 5. 맵/타일 생성
     // =========================
     function initTiles() {
-      const { ROWS, COLS, NUM_TILES } = GameConfig;
+      const { ROWS, COLS } = GameConfig;
       for (let r = 0; r < ROWS; r++) {
         const rowDiv = document.createElement("div");
         rowDiv.className = "hex-row" + (r % 2 === 1 ? " offset" : "");
@@ -507,11 +526,11 @@
               <div><span class="label">인구:</span> <span class="pop">0</span></div>
               <div><span class="label">감염:</span> <span class="inf">0</span></div>
               <div><span class="label">플레이어:</span> <span class="ply">0</span></div>
+              <div class="tile-pieces"></div>
             </div>
           `;
           div.appendChild(content);
 
-          // 타일 클릭: 플레이어 선택/이동
           div.addEventListener("click", () =>
             onTileClick(parseInt(div.dataset.index, 10))
           );
@@ -521,7 +540,8 @@
             root: div,
             pop: content.querySelector(".pop"),
             inf: content.querySelector(".inf"),
-            ply: content.querySelector(".ply")
+            ply: content.querySelector(".ply"),
+            pieces: content.querySelector(".tile-pieces")
           };
         }
         UI.hexGrid.appendChild(rowDiv);
@@ -529,12 +549,11 @@
     }
 
     // =========================
-    // 6. 엔티티 초기화 (시민 + 플레이어)
+    // 6. 엔티티 초기화
     // =========================
     function initEntities() {
       const { NUM_CITIZENS, NUM_PLAYERS, NUM_TILES } = GameConfig;
       const ents = [];
-      // 시민
       for (let i = 0; i < NUM_CITIZENS; i++) {
         ents.push({
           id: "C" + i,
@@ -543,7 +562,6 @@
           infected: false
         });
       }
-      // 플레이어
       for (let i = 0; i < NUM_PLAYERS; i++) {
         ents.push({
           id: "P" + i,
@@ -552,7 +570,6 @@
           infected: false
         });
       }
-      // 무작위 플레이어 1명 감염자
       const randP = NUM_CITIZENS + randInt(NUM_PLAYERS);
       ents[randP].infected = true;
 
@@ -560,7 +577,7 @@
     }
 
     // =========================
-    // 7. 플레이어 선택/이동 관련
+    // 7. 플레이어 선택/이동
     // =========================
     function updateSelectedPlayerInfo() {
       const { selectedPlayer, playersMovedThisTurn } = GameState;
@@ -656,7 +673,7 @@
     }
 
     // =========================
-    // 8. 이동/감염/상자 로직 (Game Logic)
+    // 8. 이동/감염/상자 로직
     // =========================
     function stepMovement() {
       const state = GameState;
@@ -668,8 +685,12 @@
     }
 
     function stepInfection() {
-      const { NUM_TILES, BASE_INFECTION_RATE, PLAYER_BASE_RATE, VACCINE_REDUCTION_FACTOR } =
-        GameConfig;
+      const {
+        NUM_TILES,
+        BASE_INFECTION_RATE,
+        PLAYER_BASE_RATE,
+        VACCINE_REDUCTION_FACTOR
+      } = GameConfig;
       const state = GameState;
 
       const tilePop = [...Array(NUM_TILES)].map(() => ({
@@ -700,7 +721,6 @@
 
         let healthy = citizens.filter(c => !c.infected);
 
-        // 감염된 플레이어 → 시민 1명 감염 시도
         for (const p of infectedPlayers) {
           if (healthy.length === 0) break;
           const idx = randInt(healthy.length);
@@ -712,7 +732,6 @@
           healthy.splice(idx, 1);
         }
 
-        // 감염된 시민 → 시민 1명 감염 시도
         healthy = citizens.filter(c => !c.infected);
         for (const src of startInfCitizens) {
           if (healthy.length === 0) break;
@@ -790,7 +809,7 @@
     }
 
     // =========================
-    // 9. 렌더링 (Tiles / Stats / History)
+    // 9. 렌더링
     // =========================
     function renderTiles() {
       const { NUM_TILES } = GameConfig;
@@ -801,12 +820,22 @@
         infected: 0,
         players: 0
       }));
+      // 말(토큰) 생성을 위해 실제 엔티티 목록도 저장
+      const tileEntities = [...Array(NUM_TILES)].map(() => ({
+        players: [],
+        citizens: []
+      }));
 
       for (const e of state.entities) {
         const t = tiles[e.tileIndex];
         t.total++;
         if (e.infected) t.infected++;
-        if (e.type === "player") t.players++;
+        if (e.type === "player") {
+          t.players++;
+          tileEntities[e.tileIndex].players.push(e);
+        } else {
+          tileEntities[e.tileIndex].citizens.push(e);
+        }
       }
 
       for (let i = 0; i < NUM_TILES; i++) {
@@ -829,6 +858,30 @@
             245 * (1 - intensity)
           },${245 * (1 - intensity)})`;
         }
+
+        // 말(토큰) 표시 업데이트
+        const pieceContainer = el.pieces;
+        pieceContainer.innerHTML = "";
+
+        const playersHere = tileEntities[i].players;
+        const citizensHere = tileEntities[i].citizens;
+
+        // 너무 많으면 보기 힘드니까, 일단 각 종류별로 최대 3개씩만 표시
+        const maxPiecesPerType = 3;
+
+        playersHere.slice(0, maxPiecesPerType).forEach(p => {
+          const d = document.createElement("div");
+          d.className =
+            "piece player" + (p.infected ? " infected" : "");
+          pieceContainer.appendChild(d);
+        });
+
+        citizensHere.slice(0, maxPiecesPerType).forEach(c => {
+          const d = document.createElement("div");
+          d.className =
+            "piece citizen" + (c.infected ? " infected" : "");
+          pieceContainer.appendChild(d);
+        });
       }
     }
 
