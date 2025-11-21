@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>전염병 확산 게임 - v2.14 (7칸 가로 · 98 헥스)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --panel-bg: #ffffff;
+      --border: #d0d0dd;
+      --accent: #4a6fff;
+      --text-main: #222222;
+      --text-muted: #666666;
+      --radius-lg: 16px;
+      --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .app {
+      width: 100%;
+      max-width: 1400px;
+      min-height: 100vh;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    header {
+      background: var(--panel-bg);
+      border-radius: var(--radius-lg);
+      padding: 12px 16px;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .header-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eef0ff;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      transition: transform 0.08s ease;
+      box-shadow: 0 4px 12px rgba(74, 111, 255, 0.35);
+    }
+    .btn.secondary {
+      background: #ececf5;
+      color: var(--text-main);
+      box-shadow: none;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(74, 111, 255, 0.5);
+    }
+    main.layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+      gap: 12px;
+      min-height: 0;
+    }
+    .map-panel {
+      background: var(--panel-bg);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: var(--shadow-soft);
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+    .panel-header span:last-child {
+      color: var(--text-muted);
+    }
+
+    /* ===== 벌집 육각 레이아웃 (가로 7칸, 세로 14줄, 총 98칸) ===== */
+    .hex-grid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 4px;
+      overflow: auto;
+      background: transparent;
+      margin-left: -60px;
+      margin-top: 40px;
+    }
+
+    .hex-row {
+      display: flex;
+      gap: 40px; 
+    }
+
+    .hex-row + .hex-row {
+      margin-top: -40px;
+    }
+
+    .hex-row.offset {
+      margin-left: 120px;
+    }
+
+    .hex-tile {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      background: #fafafe;
+      border: 1px solid var(--border);
+      transition: transform .08s, box-shadow .08s, border-color .08s, background-color .08s;
+      clip-path: polygon(
+        25% 0%,
+        75% 0%,
+        100% 50%,
+        75% 100%,
+        25% 100%,
+        0% 50%
+      );
+    }
+    .hex-tile:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-soft);
+    }
+    .hex-tile.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(74, 111, 255, 0.5);
+    }
+    .hex-tile-content {
+      position: absolute;
+      inset: 18%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 0.65rem;
+    }
+    .tile-top {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+    .tile-bottom {
+      font-size: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .tile-bottom span.label {
+      color: var(--text-muted);
+    }
+
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel-bg);
+      border-radius: var(--radius-lg);
+      padding: 10px 12px;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .stat-item {
+      border: 1px solid #ececf5;
+      border-radius: 10px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 0.8rem;
+    }
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+    .stat-value {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .stat-note {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+    .stat-history {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed #ccc;
+      font-size: .75rem;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .log-list {
+      list-style: none;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: .8rem;
+    }
+    footer {
+      font-size: .75rem;
+      color: var(--text-muted);
+      padding: 4px;
+    }
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.78rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <h1>전염병 확산 게임 — 싱글플레이 프로토타입 v2.14</h1>
+      <div class="header-right">
+        <span class="badge">로컬 시뮬레이션</span>
+        <span>플레이어 25명 · 시민 500명</span>
+        <button class="btn secondary" id="addDummyLogBtn">테스트 로그 추가</button>
+        <button class="btn secondary" id="newGameBtn">새 게임</button>
+        <button class="btn" id="nextTurnBtn">다음 턴 진행</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="map-panel">
+        <div class="panel-header">
+          <span>맵 (98 헥스)</span>
+          <span>가로 7칸 · 세로 14줄 · 6방향 이동</span>
+        </div>
+        <div class="hex-grid" id="hexGrid"></div>
+      </section>
+
+      <section class="side-panel">
+        <div class="card">
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-label">전체 인구</div>
+              <div class="stat-value" id="statTotal">525</div>
+              <div class="stat-note">플레이어 25 + 시민 500</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">감염 인구</div>
+              <div class="stat-value" id="statInfected">0</div>
+              <div class="stat-note">플레이어 + 시민 합산</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">감염률</div>
+              <div class="stat-value" id="statRatio">0%</div>
+              <div class="stat-note">전체 대비 비율</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">현재 턴</div>
+              <div class="stat-value" id="statTurn">1</div>
+              <div class="stat-note">턴 제한 없음</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">열린 상자 수</div>
+              <div class="stat-value" id="statOpenedChests">0 / 8</div>
+              <div class="stat-note">8개 열면 백신 완성</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">백신 상태</div>
+              <div class="stat-value" id="statVaccineStatus">개발 전</div>
+              <div class="stat-note">
+                <label class="toggle-label">
+                  <input type="checkbox" id="vaccineToggle" checked />
+                  백신 시스템 사용
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-history" id="infectedHistoryBox">
+            <div><b>턴별 누적 감염 인구 (기록용)</b></div>
+            <div>아직 데이터가 없습니다.</div>
+          </div>
+
+          <div id="selectedPlayerInfo" style="margin-top:6px; font-size:0.78rem;">
+            선택된 플레이어: 없음 (플레이어가 있는 타일을 클릭해서 선택)
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:600">턴 로그</div>
+          <ul class="log-list" id="logList"></ul>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      ※ 이 버전은 로컬에서 플레이어를 직접 이동시키며(턴당 1칸, 6방향) 감염 확산 패턴을 관찰하기 위한 프로토타입입니다.
+    </footer>
+  </div>
+
+  <script>
+    // 가로 7칸, 세로 14줄, 총 98칸
+    const ROWS = 14, COLS = 7, NUM_TILES = 98;
+    const NUM_CITIZENS = 500, NUM_PLAYERS = 25;
+    const BASE_INFECTION_RATE = 0.7;
+    const PLAYER_BASE_RATE = 1.0;
+    const VACCINE_REDUCTION_FACTOR = 0.1;
+    const CHESTS_REQUIRED_FOR_VACCINE = 8;
+
+    let currentTurn = 1;
+    const entities = [];
+
+    const historyCumulativeInfected = [];
+    let lastRecordedTurn = 0;
+
+    let activeChestTiles = new Set();
+    let chestWave = 0;
+    let openedChestCount = 0;
+    let vaccineActive = false;
+    let vaccineFeatureEnabled = true;
+
+    let selectedPlayer = null;
+    let selectedPlayerTileIndex = null;
+    let playersMovedThisTurn = new Set();
+
+    const hexGrid = document.getElementById("hexGrid");
+    const logList = document.getElementById("logList");
+    const statTurn = document.getElementById("statTurn");
+    const statInfected = document.getElementById("statInfected");
+    const statRatio = document.getElementById("statRatio");
+    const statTotal = document.getElementById("statTotal");
+    const statOpenedChests = document.getElementById("statOpenedChests");
+    const statVaccineStatus = document.getElementById("statVaccineStatus");
+    const infectedHistoryBox = document.getElementById("infectedHistoryBox");
+    const vaccineToggle = document.getElementById("vaccineToggle");
+    const selectedPlayerInfo = document.getElementById("selectedPlayerInfo");
+
+    statTotal.textContent = NUM_CITIZENS + NUM_PLAYERS;
+
+    const tileElements = [];
+    const randInt = max => Math.floor(Math.random() * max);
+
+    function addLog(msg) {
+      const li = document.createElement("li");
+      li.textContent = `T${currentTurn} ${msg}`;
+      logList.appendChild(li);
+      logList.scrollTop = logList.scrollHeight;
+    }
+    function addInitialLog() {
+      const li = document.createElement("li");
+      li.textContent = "T0 게임이 초기화되었습니다. 감염자 1명이 무작위 지정됨.";
+      logList.appendChild(li);
+    }
+
+    function tileIndexToRowCol(i) {
+      return { row: Math.floor(i / COLS), col: i % COLS };
+    }
+    function rowColToIndex(r, c) {
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return -1;
+      return r * COLS + c;
+    }
+
+    // 6방향 이웃
+    function getNeighborIndices(i) {
+      const { row, col } = tileIndexToRowCol(i);
+      const isOdd = row % 2 === 1;
+
+      const dirs = isOdd
+        ? [
+            { dr: -1, dc: 0 },
+            { dr: 1, dc: 0 },
+            { dr: 0, dc: -1 },
+            { dr: 0, dc: 1 },
+            { dr: -1, dc: 1 },
+            { dr: 1, dc: 1 }
+          ]
+        : [
+            { dr: -1, dc: 0 },
+            { dr: 1, dc: 0 },
+            { dr: 0, dc: -1 },
+            { dr: 0, dc: 1 },
+            { dr: -1, dc: -1 },
+            { dr: 1, dc: -1 }
+          ];
+
+      const res = [];
+      for (const d of dirs) {
+        const ni = rowColToIndex(row + d.dr, col + d.dc);
+        if (ni !== -1) res.push(ni);
+      }
+      return res;
+    }
+
+    function initTiles() {
+      for (let r = 0; r < ROWS; r++) {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "hex-row" + (r % 2 === 1 ? " offset" : "");
+        for (let c = 0; c < COLS; c++) {
+          const i = r * COLS + c;
+
+          const div = document.createElement("div");
+          div.className = "hex-tile";
+          div.dataset.index = i;
+
+          const content = document.createElement("div");
+          content.className = "hex-tile-content";
+          content.innerHTML = `
+            <div class="tile-top">
+              <span>#${i}</span>
+            </div>
+            <div class="tile-bottom">
+              <div><span class="label">인구:</span> <span class="pop">0</span></div>
+              <div><span class="label">감염:</span> <span class="inf">0</span></div>
+              <div><span class="label">플레이어:</span> <span class="ply">0</span></div>
+            </div>
+          `;
+          div.appendChild(content);
+
+          div.addEventListener("click", () => onTileClick(i));
+
+          rowDiv.appendChild(div);
+          tileElements[i] = {
+            root: div,
+            pop: content.querySelector(".pop"),
+            inf: content.querySelector(".inf"),
+            ply: content.querySelector(".ply")
+          };
+        }
+        hexGrid.appendChild(rowDiv);
+      }
+    }
+
+    function initEntities() {
+      entities.length = 0;
+      for (let i = 0; i < NUM_CITIZENS; i++) {
+        entities.push({
+          id: "C" + i,
+          type: "citizen",
+          tileIndex: randInt(NUM_TILES),
+          infected: false
+        });
+      }
+      for (let i = 0; i < NUM_PLAYERS; i++) {
+        entities.push({
+          id: "P" + i,
+          type: "player",
+          tileIndex: randInt(NUM_TILES),
+          infected: false
+        });
+      }
+      const randP = NUM_CITIZENS + randInt(NUM_PLAYERS);
+      entities[randP].infected = true;
+    }
+
+    function updateSelectedPlayerInfo() {
+      if (!selectedPlayer) {
+        selectedPlayerInfo.textContent =
+          "선택된 플레이어: 없음 (플레이어가 있는 타일을 클릭해서 선택)";
+      } else {
+        const movedFlag = playersMovedThisTurn.has(selectedPlayer.id)
+          ? " / 이 턴 이동 완료"
+          : " / 이 턴 이동 가능";
+        selectedPlayerInfo.textContent =
+          `선택된 플레이어: ${selectedPlayer.id} (현재 타일 #${selectedPlayer.tileIndex})${movedFlag}`;
+      }
+    }
+
+    function clearSelection() {
+      if (selectedPlayerTileIndex !== null) {
+        tileElements[selectedPlayerTileIndex].root.classList.remove("selected");
+      }
+      selectedPlayer = null;
+      selectedPlayerTileIndex = null;
+      updateSelectedPlayerInfo();
+    }
+
+    function selectPlayerOnTile(tileIndex) {
+      const player = entities.find(
+        e => e.type === "player" && e.tileIndex === tileIndex
+      );
+      if (!player) {
+        clearSelection();
+        return;
+      }
+      if (selectedPlayerTileIndex !== null) {
+        tileElements[selectedPlayerTileIndex].root.classList.remove("selected");
+      }
+      selectedPlayer = player;
+      selectedPlayerTileIndex = tileIndex;
+      tileElements[tileIndex].root.classList.add("selected");
+      updateSelectedPlayerInfo();
+    }
+
+    function onTileClick(tileIndex) {
+      if (!selectedPlayer) {
+        selectPlayerOnTile(tileIndex);
+        return;
+      }
+      const currentIndex = selectedPlayer.tileIndex;
+
+      if (tileIndex === currentIndex) {
+        clearSelection();
+        return;
+      }
+
+      if (playersMovedThisTurn.has(selectedPlayer.id)) {
+        addLog(`플레이어 ${selectedPlayer.id}는 이미 이 턴에 이동했습니다.`);
+        updateSelectedPlayerInfo();
+        return;
+      }
+
+      const neighbors = getNeighborIndices(currentIndex);
+
+      if (neighbors.includes(tileIndex)) {
+        const from = currentIndex;
+        selectedPlayer.tileIndex = tileIndex;
+        selectedPlayerTileIndex = tileIndex;
+
+        playersMovedThisTurn.add(selectedPlayer.id);
+
+        tileElements[from].root.classList.remove("selected");
+        tileElements[tileIndex].root.classList.add("selected");
+
+        renderAll();
+        addLog(`플레이어 ${selectedPlayer.id}가 타일 #${from} → #${tileIndex} 로 이동했습니다. (이 턴 이동 완료)`);
+        updateSelectedPlayerInfo();
+        return;
+      }
+
+      const otherPlayer = entities.find(
+        e => e.type === "player" && e.tileIndex === tileIndex
+      );
+      if (otherPlayer) {
+        selectPlayerOnTile(tileIndex);
+      }
+    }
+
+    function stepMovement() {
+      for (const e of entities) {
+        if (e.type !== "citizen") continue;
+        const nei = getNeighborIndices(e.tileIndex);
+        if (nei.length > 0) e.tileIndex = nei[randInt(nei.length)];
+      }
+    }
+
+    function stepInfection() {
+      const tilePop = [...Array(NUM_TILES)].map(() => ({
+        citizens: [], players: []
+      }));
+
+      for (const e of entities) {
+        if (e.type === "citizen") tilePop[e.tileIndex].citizens.push(e);
+        else tilePop[e.tileIndex].players.push(e);
+      }
+
+      const useReduction = vaccineFeatureEnabled && vaccineActive;
+      const citizenRate =
+        BASE_INFECTION_RATE * (useReduction ? VACCINE_REDUCTION_FACTOR : 1);
+      const playerRate =
+        PLAYER_BASE_RATE * (useReduction ? VACCINE_REDUCTION_FACTOR : 1);
+
+      let newInf = 0;
+
+      for (let t = 0; t < NUM_TILES; t++) {
+        const tile = tilePop[t];
+        const citizens = tile.citizens;
+        const players = tile.players;
+
+        const infectedPlayers = players.filter(p => p.infected);
+        const startInfCitizens = citizens.filter(c => c.infected);
+
+        let healthy = citizens.filter(c => !c.infected);
+
+        for (const p of infectedPlayers) {
+          if (healthy.length === 0) break;
+          const idx = randInt(healthy.length);
+          const target = healthy[idx];
+          if (!target.infected && Math.random() < playerRate) {
+            target.infected = true;
+            newInf++;
+          }
+          healthy.splice(idx, 1);
+        }
+
+        healthy = citizens.filter(c => !c.infected);
+        for (const src of startInfCitizens) {
+          if (healthy.length === 0) break;
+          const idx = randInt(healthy.length);
+          const target = healthy[idx];
+          if (!target.infected && Math.random() < citizenRate) {
+            target.infected = true;
+            newInf++;
+          }
+          healthy.splice(idx, 1);
+        }
+      }
+      return newInf;
+    }
+
+    function spawnChestsIfNeeded() {
+      if (!vaccineFeatureEnabled || vaccineActive) return;
+      if (currentTurn < 3) return;
+      if ((currentTurn - 3) % 3 !== 0) return;
+
+      chestWave++;
+      const toSpawn = chestWave;
+      let spawned = 0;
+
+      while (spawned < toSpawn && activeChestTiles.size < NUM_TILES) {
+        const tileIndex = randInt(NUM_TILES);
+        if (activeChestTiles.has(tileIndex)) continue;
+        activeChestTiles.add(tileIndex);
+        spawned++;
+      }
+      if (spawned > 0) addLog(`보물상자 ${spawned}개가 랜덤 위치에 등장했습니다.`);
+    }
+
+    function openChestsByPlayers() {
+      if (!vaccineFeatureEnabled) return;
+      if (activeChestTiles.size === 0) return;
+
+      let openedThisTurn = 0;
+      const wasVaccineResearchStarted = openedChestCount > 0;
+
+      for (const e of entities) {
+        if (e.type !== "player" || e.infected) continue;
+        const idx = e.tileIndex;
+        if (activeChestTiles.has(idx)) {
+          activeChestTiles.delete(idx);
+          openedChestCount++;
+          openedThisTurn++;
+
+          if (openedChestCount === 1 && !wasVaccineResearchStarted) {
+            addLog("첫 보물상자가 열려 백신 개발이 시작되었습니다.");
+          }
+          if (!vaccineActive && openedChestCount >= CHESTS_REQUIRED_FOR_VACCINE) {
+            vaccineActive = true;
+            activeChestTiles.clear();
+            addLog("백신이 개발되었습니다! 감염 확률이 90% 감소합니다. (이후 상자는 등장하지 않습니다.)");
+          }
+        }
+      }
+
+      if (openedThisTurn > 0) {
+        addLog(`플레이어가 보물상자 ${openedThisTurn}개를 열었습니다. (누적: ${openedChestCount}개)`);
+      }
+    }
+
+    function renderTiles() {
+      const tiles = [...Array(NUM_TILES)].map(() => ({
+        total: 0, infected: 0, players: 0
+      }));
+
+      for (const e of entities) {
+        const t = tiles[e.tileIndex];
+        t.total++;
+        if (e.infected) t.infected++;
+        if (e.type === "player") t.players++;
+      }
+
+      for (let i = 0; i < NUM_TILES; i++) {
+        const t = tiles[i];
+        const el = tileElements[i];
+
+        el.pop.textContent = t.total;
+        el.inf.textContent = t.infected;
+        el.ply.textContent = t.players;
+
+        const hasChest = vaccineFeatureEnabled && activeChestTiles.has(i);
+
+        if (hasChest) {
+          el.root.style.backgroundColor = "rgb(200, 220, 255)";
+        } else {
+          const ratio = t.total > 0 ? t.infected / t.total : 0;
+          const intensity = Math.min(1, ratio * 1.2);
+          el.root.style.backgroundColor =
+            `rgb(255,${245 * (1 - intensity)},${245 * (1 - intensity)})`;
+        }
+      }
+    }
+
+    function computeInfectedCount() {
+      return entities.filter(e => e.infected).length;
+    }
+
+    function updateInfectedHistory() {
+      if (historyCumulativeInfected.length === 0) {
+        infectedHistoryBox.innerHTML =
+          "<div><b>턴별 누적 감염 인구 (기록용)</b></div><div>아직 데이터가 없습니다.</div>";
+        return;
+      }
+      let html = "<div><b>턴별 누적 감염 인구 (기록용)</b></div>";
+      for (const h of historyCumulativeInfected) {
+        html += `<div>T${h.turn}: ${h.infected}명</div>`;
+      }
+      infectedHistoryBox.innerHTML = html;
+    }
+
+    function renderStats() {
+      const inf = computeInfectedCount();
+      const total = NUM_CITIZENS + NUM_PLAYERS;
+
+      statInfected.textContent = inf;
+      statRatio.textContent = Math.round((inf / total) * 100) + "%";
+      statTurn.textContent = currentTurn;
+
+      if (!vaccineFeatureEnabled) {
+        statOpenedChests.textContent = "-";
+        statVaccineStatus.textContent = "비활성화";
+      } else {
+        statOpenedChests.textContent =
+          `${openedChestCount} / ${CHESTS_REQUIRED_FOR_VACCINE}`;
+        statVaccineStatus.textContent = vaccineActive ? "개발 완료" : "개발 전";
+      }
+
+      if (lastRecordedTurn !== currentTurn) {
+        historyCumulativeInfected.push({ turn: currentTurn, infected: inf });
+        lastRecordedTurn = currentTurn;
+        updateInfectedHistory();
+      }
+    }
+
+    function renderAll() {
+      renderTiles();
+      renderStats();
+    }
+
+    function resetGame() {
+      currentTurn = 1;
+      historyCumulativeInfected.length = 0;
+      lastRecordedTurn = 0;
+      activeChestTiles = new Set();
+      chestWave = 0;
+      openedChestCount = 0;
+      vaccineActive = false;
+      playersMovedThisTurn = new Set();
+
+      clearSelection();
+      logList.innerHTML = "";
+      initEntities();
+      renderAll();
+      addInitialLog();
+    }
+
+    function nextTurn() {
+      currentTurn++;
+      playersMovedThisTurn = new Set();
+
+      spawnChestsIfNeeded();
+      stepMovement();
+      openChestsByPlayers();
+      const newInf = stepInfection();
+
+      renderAll();
+      updateSelectedPlayerInfo();
+      addLog(`새 감염자 ${newInf}명`);
+    }
+
+    function init() {
+      initTiles();
+      initEntities();
+      renderAll();
+      addInitialLog();
+      updateSelectedPlayerInfo();
+
+      document.getElementById("addDummyLogBtn")
+        .addEventListener("click", () => addLog("테스트 로그"));
+      document.getElementById("nextTurnBtn")
+        .addEventListener("click", nextTurn);
+      document.getElementById("newGameBtn")
+        .addEventListener("click", resetGame);
+
+      vaccineToggle.addEventListener("change", () => {
+        vaccineFeatureEnabled = vaccineToggle.checked;
+        if (!vaccineFeatureEnabled) {
+          activeChestTiles = new Set();
+          chestWave = 0;
+          openedChestCount = 0;
+          vaccineActive = false;
+          addLog("백신 시스템이 비활성화되었습니다. 상자와 백신 효과가 모두 제거됩니다.");
+        } else {
+          addLog("백신 시스템이 활성화되었습니다. 3턴 이후부터 보물상자가 등장합니다.");
+        }
+        renderAll();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
