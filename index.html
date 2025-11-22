@@ -383,6 +383,17 @@
   };
 
   // =========================
+  // SVG 기반 타일 좌표 / 이웃 정보
+  // =========================
+  const tileCenters = [];   // 각 타일의 중심 좌표 {x, y}
+  const tileNeighbors = []; // 각 타일의 이웃 인덱스 배열
+  // 앞으로는 이 함수만 쓰게 함
+  function getNeighborIndices(i) {
+    return tileNeighbors[i] || [];
+  }
+    
+
+  // =========================
   // 3. UI 요소 참조 (DOM)
   // =========================
   const UI = {
@@ -442,37 +453,6 @@
     return r * GameConfig.COLS + c;
   }
 
-  // 6방향 이웃 (벌집 구조용)
-  function getNeighborIndices(i) {
-    const { row, col } = tileIndexToRowCol(i);
-    const isOdd = row % 2 === 1;
-
-    const dirs = isOdd
-      ? [
-        { dr: -1, dc: 0 },
-        { dr: 1, dc: 0 },
-        { dr: 0, dc: -1 },
-        { dr: 0, dc: 1 },
-        { dr: -1, dc: 1 },
-        { dr: 1, dc: 1 }
-      ]
-      : [
-        { dr: -1, dc: 0 },
-        { dr: 1, dc: 0 },
-        { dr: 0, dc: -1 },
-        { dr: 0, dc: 1 },
-        { dr: -1, dc: -1 },
-        { dr: 1, dc: -1 }
-      ];
-
-    const res = [];
-    for (const d of dirs) {
-      const ni = rowColToIndex(row + d.dr, col + d.dc);
-      if (ni !== -1) res.push(ni);
-    }
-    return res;
-  }
-
   // =========================
   // 5. SVG 맵 + 타일 오버레이 생성
   // =========================
@@ -480,58 +460,63 @@
     fetch("./assets/map.svg")
       .then(res => res.text())
       .then(svgText => {
+        // 1) SVG 삽입
         UI.svgMapContainer.insertAdjacentHTML("afterbegin", svgText);
-        const svg = UI.svgMapContainer.querySelector("svg");
-        if (!svg) {
-          console.error("SVG 요소를 찾지 못했습니다.");
-          return;
-        }
+        console.log("SVG 맵 불러오기 완료");
+  
+        // 2) SVG 및 타일 path 가져오기
+        const svgEl = UI.svgMapContainer.querySelector("svg");
+        const paths = svgEl.querySelectorAll("path[data-tile-index]");
 
-        // path[data-tile-index] 기준으로 0~NUM_TILES-1 타일 매핑되어 있다고 가정
-        const paths = svg.querySelectorAll("path[data-tile-index]");
-        GameState.tileElements = [];
-
+        // 3) 각 타일 중심 좌표 계산 (SVG 좌표계 기준)
+        tileCenters.length = paths.length;
         paths.forEach(path => {
-          const index = parseInt(path.getAttribute("data-tile-index"), 10);
-          if (Number.isNaN(index)) return;
-
-          // path의 중심 좌표 구하기 (대략적인 bounding box 중심 사용)
-          const mapRect = UI.svgMapContainer.getBoundingClientRect();
-          const rect = path.getBoundingClientRect();
-          const cx = rect.left - mapRect.left + rect.width / 2;
-          const cy = rect.top - mapRect.top + rect.height / 2;
-          const overlay = document.createElement("div");
-          overlay.className = "tile-overlay";
-          overlay.style.left = `${cx}px`;
-          overlay.style.top = `${cy}px`;
-
-          // 타일 내용 (인구 + 말 토큰만 표시)
-          overlay.innerHTML = `
-            <div class="tile-bottom">
-              <div><span class="label">인구:</span> <span class="pop">0</span></div>
-              <div class="tile-pieces"></div>
-            </div>
-          `;
-
-          UI.svgMapContainer.appendChild(overlay);
-
-          // path 클릭 시 플레이어 선택/이동
-          path.style.cursor = "pointer";
-          path.addEventListener("click", () => onTileClick(index));
-
-          GameState.tileElements[index] = {
-            path,
-            overlay,
-            pop: overlay.querySelector(".pop"),
-            pieces: overlay.querySelector(".tile-pieces")
-          };
+          const idx = parseInt(path.getAttribute("data-tile-index"), 10);
+          const bbox = path.getBBox();
+          const cx = bbox.x + bbox.width / 2;
+          const cy = bbox.y + bbox.height / 2;
+          tileCenters[idx] = { x: cx, y: cy };
         });
 
-        console.log("SVG 맵 + 타일 오버레이 로드 완료");
-        renderAll();
+        // 4) 각 타일별로 "가장 가까운 6개"를 이웃으로 등록
+        const MAX_NEIGHBORS = 6;
+        tileNeighbors.length = tileCenters.length;
+        for (let i = 0; i < tileCenters.length; i++) {
+          tileNeighbors[i] = [];
+        }
+
+        for (let i = 0; i < tileCenters.length; i++) {
+          const ci = tileCenters[i];
+          const distList = [];
+
+          for (let j = 0; j < tileCenters.length; j++) {
+            if (i === j) continue;
+            const cj = tileCenters[j];
+            const dx = ci.x - cj.x;
+            const dy = ci.y - cj.y;
+            const dist = Math.hypot(dx, dy);
+            distList.push({ j, dist });
+          }
+
+          // 거리 기준 정렬 후, 가장 가까운 6개 선택
+          distList.sort((a, b) => a.dist - b.dist);
+          const nearest = distList.slice(0, MAX_NEIGHBORS);
+          tileNeighbors[i] = nearest.map(o => o.j);
+        }
+
+        // 5) 이웃 관계를 대칭으로 보정 (j가 i 이웃이면, i도 j 이웃으로)
+        for (let i = 0; i < tileNeighbors.length; i++) {
+          for (const j of tileNeighbors[i]) {
+            if (!tileNeighbors[j].includes(i)) {
+              tileNeighbors[j].push(i);
+            }
+          }
+        }
+
+        console.log("SVG 기반 이웃 정보 계산 완료", tileNeighbors);
       })
       .catch(err => console.error("SVG 로드 오류:", err));
-  }
+}
 
   // =========================
   // 6. 엔티티 초기화
@@ -982,6 +967,7 @@
 </script>
 </body>
 </html>
+
 
 
 
