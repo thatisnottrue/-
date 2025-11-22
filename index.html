@@ -839,7 +839,9 @@
           continue;
         }
 
-        const r = neighvors[randInt(neighbors.length)];
+        const r = neighbors[randInt(neighbors.length)];
+        p.tileIndex = r;
+        state.playersMovedThisTurn.add(p.id);
       }
     }
 
@@ -1255,6 +1257,7 @@
   </script>
 </body>
 </html>
+
 
 
 
