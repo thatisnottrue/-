@@ -304,7 +304,7 @@
           <span>맵 (98 헥스)</span>
           <span>가로 7칸 · 세로 14줄 · 6방향 이동</span>
         </div>
-        <div class="hex-grid" id="hexGrid"></div>
+        <div id="svgMapContainer" class="svg-map"></div>
       </section>
 
       <section class="side-panel">
@@ -1016,5 +1016,18 @@
 
     init();
   </script>
+      function loadSVGMap() {
+    fetch("assets/map.svg")
+      .then(res => res.text())
+      .then(svgText => {
+        document.getElementById("svgMapContainer").innerHTML = svgText;
+        console.log("SVG 맵 불러오기 완료");
+      })
+      .catch(err => console.error("SVG 로드 오류:", err));
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadSVGMap();
 </body>
 </html>
+
