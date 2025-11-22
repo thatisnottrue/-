@@ -854,7 +854,6 @@
       const state = GameState;
       if (!state.vaccineFeatureEnabled) return;
       if (areAllPlayersVaccinated()) return;
-      if (!state.vaccineFeatureEnabled || state.vaccineActive) return;
       if (state.currentTurn < 3) return;
       if ((state.currentTurn - 3) % 3 !== 0) return;
 
@@ -1148,6 +1147,7 @@
   </script>
 </body>
 </html>
+
 
 
 
