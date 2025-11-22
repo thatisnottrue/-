@@ -1018,7 +1018,8 @@
       const tiles = [...Array(NUM_TILES)].map(() => ({
         total: 0,
         infected: 0,
-        players: 0
+        players: 0,
+        vaccinatedCitizens: 0
       }));
       const tileEntities = [...Array(NUM_TILES)].map(() => ({
         players: [],
@@ -1034,6 +1035,9 @@
           tileEntities[e.tileIndex].players.push(e);
         } else {
           tileEntities[e.tileIndex].citizens.push(e);
+
+          if (e.vaccinated) {
+            t.vaccinatedCitizens++;
         }
       }
 
@@ -1051,14 +1055,30 @@
         if (hasChest) {
           el.path.style.fill = "rgba(200, 220, 255, 0.9)";
         } else {
-          const ratio = t.total > 0 ? t.infected / t.total : 0;
-          if (ratio === 0) {
-            el.path.style.fill = "#FAFAFA";
+          const infratio = t.total > 0 ? t.infected / t.total : 0;
+          const vacRatio = t.total > 0 ? t.vaccinatedCitizens / t.total : 0;
+          let baseR, baseG, baseB;
+          if (infRatio === 0) {
+            baseR = 250;
+            baseG = 250;
+            baseB = 250;
           } else {
-            const g = Math.round(250 * (1 - ratio));
-            const b = Math.round(250 * (1 - ratio));
-            el.path.style.fill = `rgb(255, ${g}, ${b})`;
+            baseR = 255;
+            baseG = Math.round(250 * (1 - infRatio));
+            baseB = Math.round(250 * (1 - infRatio));
           }
+
+          const vaccineR = 0;
+          const vaccineG = 220;
+          const vaccineB = 0;
+
+          const alpha = vacRatio; // 0 ~ 1 : 백신 비율이 곧 섞는 비율
+
+          const r = Math.round(baseR * (1 - alpha) + vaccineR * alpha);
+          const g = Math.round(baseG * (1 - alpha) + vaccineG * alpha);
+          const b = Math.round(baseB * (1 - alpha) + vaccineB * alpha);
+
+          el.path.style.fill = `rgb(${r}, ${g}, ${b})`;
         }
 
         // 말(토큰) 표시
@@ -1235,6 +1255,7 @@
   </script>
 </body>
 </html>
+
 
 
 
