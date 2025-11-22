@@ -359,8 +359,8 @@
       NUM_PLAYERS: 25,
       BASE_INFECTION_RATE: 0.8,   // 시민 감염 기본 80%
       PLAYER_BASE_RATE: 1.0,      // 감염된 플레이어 → 시민 감염 시도 확률
-      VACCINE_REDUCTION_FACTOR: 0.1, // 백신 후 감염률 90% 감소
-      CHESTS_REQUIRED_FOR_VACCINE: 8,
+      VACCINE_REDUCTION_FACTOR: 0.05, // 백신 후 감염률 95% 감소
+      CHESTS_REQUIRED_FOR_VACCINE: 5,
       RECOVERY_TURNS: 4
     };
 
@@ -579,6 +579,30 @@
     function getNeighborIndices(i) {
       return GameState.neighborMap[i] || [];
     }
+    //백신패치중추가한부분
+    function areAllPlayersVaccinated() {
+      const players = GameState.entities.filter(e => e.type === "player");
+      if (players.length === 0) return false;
+      return players.every(p => p.vaccinated);
+    }
+
+    function spreadVaccineFromPlayers() {
+      const state = GameState;
+
+      const vaccinatedTiles = new Set();
+      for (const e of state.entities) {
+        if (e.type === "player" && e.vaccinated) {
+          vaccinatedTiles.add(e.tileIndex);
+        }
+      }
+      if (vaccinatedTiles.size === 0) return;
+      for (const e of state.entities) {
+        if (e.type !== "citizen") continue;
+        if (vaccinatedTiles.has(e.tileIndex)) {
+          e.vaccinated = true;
+        }
+      }
+    }
 
     // =========================
     // 6. 엔티티 초기화
@@ -593,7 +617,8 @@
           tileIndex: randInt(NUM_TILES),
           infected: false,
           infectedTurn: null, 
-          recovered: false
+          recovered: false,
+          vaccinated: false
         });
       }
       for (let i = 0; i < NUM_PLAYERS; i++) {
@@ -601,7 +626,8 @@
           id: "P" + i,
           type: "player",
           tileIndex: randInt(NUM_TILES),
-          infected: false
+          infected: false,
+          vaccinated: false
         });
       }
       const randP = NUM_CITIZENS + randInt(NUM_PLAYERS);
@@ -829,6 +855,8 @@
 
     function spawnChestsIfNeeded() {
       const state = GameState;
+      if (!state.vaccineFeatureEnabled) return;
+      if (areAllPlayersVaccinated()) return;
       if (!state.vaccineFeatureEnabled || state.vaccineActive) return;
       if (state.currentTurn < 3) return;
       if ((state.currentTurn - 3) % 3 !== 0) return;
@@ -868,18 +896,27 @@
           if (state.openedChestCount === 1 && !wasVaccineResearchStarted) {
             addLog("첫 보물상자가 열려 백신 개발이 시작되었습니다.");
           }
+
           if (
             !state.vaccineActive &&
             state.openedChestCount >= GameConfig.CHESTS_REQUIRED_FOR_VACCINE
           ) {
             state.vaccineActive = true;
-            state.activeChestTiles.clear();
             addLog(
-              "백신이 개발되었습니다! 감염 확률이 90% 감소합니다. (이후 상자는 등장하지 않습니다.)"
+              "백신이 개발되었습니다! 이제 보물상자를 연 플레이어는 백신을 획득합니다."
             );
           }
+          if (state.vaccineActive && !e.vaccinated) {
+            e.vaccinated = true;
+            addLog(`플레이어 ${e.id}가 백신을 획득했습니다.`);
+            for (const c of state.entities) {
+              if (c.type === "citizen" && c.tileIndex === idx) {
+                c.vaccinated = true;
+              }
+            }
+          }
         }
-      }
+      } // 백신패치중
 
       if (openedThisTurn > 0) {
         addLog(
@@ -1113,6 +1150,7 @@
   </script>
 </body>
 </html>
+
 
 
 
