@@ -1099,8 +1099,10 @@
           if (p.vaccinated) {
             d.className = "piece vaccinated";
           } else {
-          d.className =
-            "piece player" + (p.infected ? " infected" : "");
+            d.className =
+              "piece player" + (p.infected ? " infected" : "");
+          }
+
           pieceContainer.appendChild(d);
         });
 
@@ -1264,6 +1266,7 @@
   </script>
 </body>
 </html>
+
 
 
 
