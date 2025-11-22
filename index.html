@@ -496,11 +496,10 @@
           if (Number.isNaN(index)) return;
 
           // path의 중심 좌표 구하기 (대략적인 bounding box 중심 사용)
-          const bbox = path.getBBox();
-          const cx = bbox.x + bbox.width / 2;
-          const cy = bbox.y + bbox.height / 2;
-
-          // 오버레이 div 생성
+          const mapRect = UI.svgMapContainer.getBoundingClientRect();
+          const rect = path.getBoundingClientRect();
+          const cx = rect.left - mapRect.left + rect.width / 2;
+          const cy = rect.top - mapRect.top + rect.height / 2;
           const overlay = document.createElement("div");
           overlay.className = "tile-overlay";
           overlay.style.left = `${cx}px`;
@@ -983,4 +982,5 @@
 </script>
 </body>
 </html>
+
 
