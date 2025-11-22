@@ -734,13 +734,12 @@
 
         healthy = citizens.filter(c => !c.infected);
         for (const src of startInfCitizens) {
-          for (let k = 0; k < 2; k++) {   
-            if (healthy.length === 0) break;
-            const idx = randInt(healthy.length);
-            const target = healthy[idx];
-            if (!target.infected && Math.random() < 0.8) {
-              target.infected = true;
-              newInf++;
+         if (healthy.length === 0) break;
+         const idx = randInt(healthy.length);
+         const target = healthy[idx];
+         if (!target.infected && Math.random() < citizenRate) {
+           target.infected = true;
+           newInf++;
           }
           healthy.splice(idx, 1);
         }
@@ -1015,6 +1014,7 @@
   </script>
 </body>
 </html>
+
 
 
 
