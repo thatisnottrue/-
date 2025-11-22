@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>전염병 확산 게임 - v2.16 (7×14 벌집 · 말 시각화)</title>
+  <title>전염병 확산 게임 - v2.17 (7×14 벌집 · 말 시각화)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root {
@@ -288,7 +288,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>전염병 확산 게임 — 싱글플레이 프로토타입 v2.16</h1>
+      <h1>전염병 확산 게임 — 싱글플레이 프로토타입 v2.17</h1>
       <div class="header-right">
         <span class="badge">GitHub + Netlify 배포</span>
         <span>플레이어 25명 · 시민 500명</span>
@@ -379,9 +379,9 @@
       get NUM_TILES() {
         return this.ROWS * this.COLS;
       },
-      NUM_CITIZENS: 500000,
+      NUM_CITIZENS: 500000,  // 테스트용으로 크게 설정되어 있음
       NUM_PLAYERS: 25,
-      BASE_INFECTION_RATE: 0.7,
+      BASE_INFECTION_RATE: 0.8,   // ★ 시민 기본 감염확률 80%로 상향
       PLAYER_BASE_RATE: 1.0,
       VACCINE_REDUCTION_FACTOR: 0.1,
       CHESTS_REQUIRED_FOR_VACCINE: 8
@@ -721,6 +721,7 @@
 
         let healthy = citizens.filter(c => !c.infected);
 
+        // 감염된 플레이어 → 시민 1명 감염 시도 (기존 그대로)
         for (const p of infectedPlayers) {
           if (healthy.length === 0) break;
           const idx = randInt(healthy.length);
@@ -732,16 +733,19 @@
           healthy.splice(idx, 1);
         }
 
+        // ★ 감염된 시민 → 최대 2명 감염 시도 (감염 확률 citizenRate = 0.8 혹은 백신 후 감소)
         healthy = citizens.filter(c => !c.infected);
         for (const src of startInfCitizens) {
-         if (healthy.length === 0) break;
-         const idx = randInt(healthy.length);
-         const target = healthy[idx];
-         if (!target.infected && Math.random() < citizenRate) {
-           target.infected = true;
-           newInf++;
+          for (let k = 0; k < 2; k++) {
+            if (healthy.length === 0) break;
+            const idx = randInt(healthy.length);
+            const target = healthy[idx];
+            if (!target.infected && Math.random() < citizenRate) {
+              target.infected = true;
+              newInf++;
+            }
+            healthy.splice(idx, 1);
           }
-          healthy.splice(idx, 1);
         }
       }
       return newInf;
@@ -1014,10 +1018,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
